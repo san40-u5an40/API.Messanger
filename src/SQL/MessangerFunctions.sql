@@ -33,6 +33,17 @@ BEGIN
     );
 END //
 
+CREATE FUNCTION account_get_id_by_profile_id(pr_phone VARCHAR(17))
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT account_id
+        FROM account
+        WHERE phone = pr_phone
+    );
+END //
+
 CREATE FUNCTION account_get_report_count(pr_account_id BIGINT UNSIGNED)
 RETURNS INT UNSIGNED
 READS SQL DATA
@@ -83,6 +94,31 @@ BEGIN
         WHERE account_id = pr_account_id
     );
 END//
+
+CREATE FUNCTION profile_is_exists(pr_profile_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS (
+		SELECT 1
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
+CREATE FUNCTION profile_get_account_id(pr_profile_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT account_id
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
+
+
 
 
 

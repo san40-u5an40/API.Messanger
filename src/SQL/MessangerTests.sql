@@ -3,7 +3,24 @@ SELECT @new_account_id;
 
 CALL account_delete('+7 9001234566');
 
-CALL account_login(20, 'CentBrowser', @session_id);
-SELECT @session_id;
+CALL account_login(20, 'CentBrowser', @account_login_id);
+SELECT @account_login_id;
+CALL account_logout(@account_login_id);
 
-CALL account_logout(21);
+CALL profile_create(2, null, 'Public (Санёчкинский)', 'Этот профиль не нуждается в описании', 'https://example.com/avka_dlya_sanyochka.jpeg', @profile_id);
+SELECT @profile_id;
+SELECT account_profile_count(2);
+
+CALL profile_select(@profile_id);
+CALL profile_is_archived_set(@profile_id, false);
+CALL profile_is_active_set(@profile_id, false);
+CALL profile_is_can_searched_set(@profile_id, true);
+CALL account_get_profiles(2, false);
+
+CALL profiles_search('Public', 0, 10);
+
+CALL profile_delete(@profile_id);
+
+
+
+

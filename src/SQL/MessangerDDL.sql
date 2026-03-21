@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public_info (
 	name VARCHAR(40) NOT NULL,
     details VARCHAR(100),
     avatar_url TEXT,
-    INDEX idx_name (name)
+    FULLTEXT INDEX idx_name (name)
 );
 
 -- На каждом аккаунте может быть не больше 10 профилей
@@ -50,9 +50,9 @@ CREATE TABLE IF NOT EXISTS profile (
 	account_id BIGINT UNSIGNED NOT NULL,
     is_last_selected BOOLEAN NOT NULL DEFAULT false,
     is_archived BOOLEAN NOT NULL DEFAULT false,
-    is_can_searched BOOLEAN NOT NULL DEFAULT false, -- Отображение в поисковой выдаче
+    is_can_searched BOOLEAN NOT NULL DEFAULT true, -- Отображение в поисковой выдаче
     is_hide_watch BOOLEAN NOT NULL DEFAULT false, -- Скрывает просмотры из статистики
-    is_active BOOLEAN NOT NULL DEFAULT false, -- Доступен ли сейчас профиль для отправки сообщений
+    is_active BOOLEAN NOT NULL DEFAULT true, -- Доступен ли сейчас профиль для отправки сообщений
     FOREIGN KEY (profile_id) REFERENCES public_info (public_info_id) ON DELETE RESTRICT, -- TODO: Проверить не находится ли по этому id групповой чат
     FOREIGN KEY (account_id) REFERENCES account (account_id) ON DELETE CASCADE,
     INDEX idx_account_id_is_last_selected (account_id, is_last_selected),
@@ -94,8 +94,7 @@ CREATE TABLE IF NOT EXISTS profile_content_item (
     value TEXT NOT NULL, -- MarkDown формат
     created_at DATETIME NOT NULL DEFAULT NOW(),
     FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE CASCADE,
-    FOREIGN KEY (forwarded_id) REFERENCES profile_content_item (profile_content_item_id) ON DELETE SET NULL,
-    FULLTEXT INDEX idx_fulltext_value(value)
+    FOREIGN KEY (forwarded_id) REFERENCES profile_content_item (profile_content_item_id) ON DELETE SET NULL
 );
 
 DROP TABLE IF EXISTS profile_content_item_report;
@@ -152,7 +151,7 @@ CREATE TABLE IF NOT EXISTS profile_publication_comment (
 
 DROP TABLE IF EXISTS profile_group_chat;
 CREATE TABLE IF NOT EXISTS profile_group_chat (
-	profile_group_chat_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+	profile_group_chat_id BIGINT UNSIGNED PRIMARY KEY,
     profile_id BIGINT UNSIGNED NOT NULL, -- Владелец
     FOREIGN KEY (profile_group_chat_id) REFERENCES public_info (public_info_id) ON DELETE RESTRICT, -- TODO: Проверить не находится ли по этому id сам профиль
     FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE RESTRICT -- При удалении профиля добавить кнопку назначения новых владельцев групповых каналов (иначе передать первому присоединившемуся, а если участников нет, просто удалить)
