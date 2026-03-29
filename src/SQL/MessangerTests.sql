@@ -14,12 +14,18 @@ SELECT account_profile_count(2);
 CALL profile_select(@profile_id);
 CALL profile_is_archived_set(@profile_id, false);
 CALL profile_is_active_set(@profile_id, false);
-CALL profile_is_can_searched_set(@profile_id, true);
+CALL profile_is_can_searched_set(@profile_id, false);
 CALL account_get_profiles(2, false);
 
 CALL profiles_search('Public', 0, 10);
 
 CALL profile_delete(@profile_id);
+
+CALL profile_subscribe_invite_create(1, 'friends', true, null, null, null, @profile_subscribe_invite_id);
+CALL profile_subscribe_invite_delete(@profile_subscribe_invite_id);
+
+CALL profile_subscribe(7, 1, 2);
+CALL profile_unsubscribe(7, 1);
 
 
 

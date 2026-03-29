@@ -61,14 +61,13 @@ CREATE TABLE IF NOT EXISTS profile (
 
 DROP TABLE IF EXISTS profile_subscribe_invite;
 CREATE TABLE IF NOT EXISTS profile_subscribe_invite (
+	profile_subscribe_invite_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     profile_id BIGINT UNSIGNED NOT NULL,
-    position INT UNSIGNED NOT NULL,
     name VARCHAR(25) NOT NULL,
     url_value VARCHAR(25) NOT NULL UNIQUE,
     miniature_url TEXT, -- Изображение на предпросмотре ссылки
     inviting_limit INT UNSIGNED,
-    is_auto_accept BOOLEAN NOT NULL DEFAULT false, -- Автоматическое одобрение подписки
-    PRIMARY KEY(profile_id, position),
+    is_auto_accept BOOLEAN NOT NULL, -- Автоматическое одобрение подписки
     FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE CASCADE
 );
 
@@ -77,12 +76,12 @@ CREATE TABLE IF NOT EXISTS profile_subscribe (
 	profile_at BIGINT UNSIGNED NOT NULL,
     profile_to BIGINT UNSIGNED NOT NULL,
     subscribed_at DATETIME NOT NULL DEFAULT NOW(),
-    invite_position INT UNSIGNED,
+    profile_subscribe_invite_id BIGINT UNSIGNED,
     status ENUM('request', 'ignore', 'accept') NOT NULL, -- Статус заявки на подписку
     PRIMARY KEY(profile_at, profile_to),
     FOREIGN KEY (profile_at) REFERENCES profile (profile_id) ON DELETE CASCADE,
     FOREIGN KEY (profile_to) REFERENCES profile (profile_id) ON DELETE CASCADE, -- TODO: Выводить предупреждени о потере подписчиков при удалении профиля
-    FOREIGN KEY (profile_to, invite_position) REFERENCES profile_subscribe_invite (profile_id, position) ON DELETE NO ACTION, -- TODO: Добавить тригер/процедуру для установки позиции в NULL при удалении
+    FOREIGN KEY (profile_subscribe_invite_id) REFERENCES profile_subscribe_invite (profile_subscribe_invite_id) ON DELETE SET NULL,
     INDEX idx_profile_to_status (profile_to, status)
 );
 
