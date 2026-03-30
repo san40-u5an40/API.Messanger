@@ -137,21 +137,18 @@ BEGIN
     );
 END//
 
-CREATE FUNCTION profile_is_owner_subscribe_invite(
-	pr_profile_id BIGINT UNSIGNED,
-	pr_profile_subscribe_invite_id BIGINT UNSIGNED
-)
-RETURNS BOOLEAN
+CREATE FUNCTION profile_subscribe_invite_get_profile_id(pr_profile_subscribe_invite_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
 READS SQL DATA
 BEGIN
-	RETURN IFNULL((
-		SELECT profile_id = pr_profile_id
+	RETURN (
+		SELECT profile_id
         FROM profile_subscribe_invite
         WHERE profile_subscribe_invite_id = pr_profile_subscribe_invite_id
-    ), false);
+    );
 END//
 
-CREATE FUNCTION profile_is_subscribe_to(
+CREATE FUNCTION profile_subscribe_is_exists(
 	pr_profile_at BIGINT UNSIGNED,
     pr_profile_to BIGINT UNSIGNED
 )
@@ -167,8 +164,38 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_subscribe_invite_subscribers_count(pr_profile_subscribe_invite_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile_subscribe
+        WHERE profile_subscribe_invite_id = pr_profile_subscribe_invite_id
+    );
+END//
 
+CREATE FUNCTION profile_subscribe_invite_get_inviting_limit(pr_profile_subscribe_invite_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT inviting_limit
+        FROM profile_subscribe_invite
+        WHERE profile_subscribe_invite_id = pr_profile_subscribe_invite_id
+    );
+END//
 
+CREATE FUNCTION public_info_is_exists(pr_public_info_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM public_info
+        WHERE public_info_id = pr_public_info_id
+    );
+END//
 
 
 

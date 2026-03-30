@@ -244,6 +244,24 @@ BEGIN
     END IF;
 END//
 
+CREATE PROCEDURE profile_check_valid(
+	IN pr_profile_id BIGINT UNSIGNED,
+    OUT pr_is_valid BOOLEAN,
+    OUT pr_message TEXT
+)
+BEGIN
+    IF pr_profile_id IS NULL THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Необходимо указать идентификатор профиля';
+    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Указанного профиля не существует';
+	ELSE
+		SET pr_is_valid = true;
+        SET pr_message = null;
+    END IF;
+END//
+
 CREATE PROCEDURE profile_is_archived_set(
 	IN pr_profile_id BIGINT UNSIGNED,
     IN pr_is_archived BOOLEAN
@@ -251,16 +269,13 @@ CREATE PROCEDURE profile_is_archived_set(
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_id IS NULL THEN
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор профиля' AS message,
+			@message AS message,
             false AS is_valid;
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
-		SELECT
-			'Указанного профиля не существует' AS message,
-			false AS is_valid;
     ELSE
 		UPDATE profile
 		SET is_archived = pr_is_archived
@@ -280,16 +295,13 @@ CREATE PROCEDURE profile_is_active_set(
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_id IS NULL THEN
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор профиля' AS message,
+			@message AS message,
             false AS is_valid;
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
-		SELECT
-			'Указанного профиля не существует' AS message,
-			false AS is_valid;
     ELSE
 		UPDATE profile
 		SET is_active = pr_is_active
@@ -309,16 +321,13 @@ CREATE PROCEDURE profile_is_can_searched_set(
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_id IS NULL THEN
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор профиля' AS message,
+			@message AS message,
             false AS is_valid;
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
-		SELECT
-			'Указанного профиля не существует' AS message,
-			false AS is_valid;
     ELSE
 		UPDATE profile
 		SET is_can_searched = pr_is_can_searched
@@ -329,6 +338,23 @@ BEGIN
             true AS is_valid;
         COMMIT;
     END IF;
+END//
+
+CREATE PROCEDURE profile_get_info(IN pr_profile_id BIGINT UNSIGNED)
+BEGIN
+	SELECT
+		p.is_archived,
+        p.is_can_searched,
+        p.is_hide_watch,
+        p.is_active,
+        pi.created_at,
+        pi.name,
+        pi.details,
+        pi.avatar_url
+	FROM
+		profile AS p
+        INNER JOIN public_info AS pi ON p.profile_id = pi.public_info_id
+    WHERE profile_id = pr_profile_id;
 END//
 
 CREATE PROCEDURE account_get_profiles(
@@ -369,6 +395,102 @@ BEGIN
         is_can_searched = true AND
         is_archived = false
 	LIMIT pr_profiles_count;
+END//
+
+CREATE PROCEDURE public_info_check_valid(
+	IN pr_public_info_id BIGINT UNSIGNED,
+    OUT pr_is_valid BOOLEAN,
+    OUT pr_message TEXT
+)
+BEGIN
+    IF pr_public_info_id IS NULL THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Необходимо указать идентификатор публичной информации';
+    ELSEIF NOT public_info_is_exists(pr_public_info_id) THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Указанной публичной информации не существует';
+	ELSE
+		SET pr_is_valid = true;
+        SET pr_message = null;
+    END IF;
+END//
+
+CREATE PROCEDURE public_info_name_set(
+	IN pr_public_info_id BIGINT UNSIGNED,
+    IN pr_name VARCHAR(40)
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL public_info_check_valid(pr_public_info_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE public_info
+		SET name = pr_name
+        WHERE public_info_id = pr_public_info_id;
+        
+		SELECT
+			'Настройки публичной информации успешно изменены' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE public_info_details_set(
+	IN pr_public_info_id BIGINT UNSIGNED,
+    IN pr_details VARCHAR(100)
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL public_info_check_valid(pr_public_info_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE public_info
+		SET details = pr_details
+        WHERE public_info_id = pr_public_info_id;
+        
+		SELECT
+			'Настройки публичной информации успешно изменены' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE public_info_avatar_url_set(
+	IN pr_public_info_id BIGINT UNSIGNED,
+    IN pr_avatar_url TEXT
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL public_info_check_valid(pr_public_info_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE public_info
+		SET avatar_url = pr_avatar_url
+        WHERE public_info_id = pr_public_info_id;
+        
+		SELECT
+			'Настройки публичной информации успешно изменены' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
 END//
 
 CREATE PROCEDURE profile_subscribe_invite_create(
@@ -484,15 +606,20 @@ BEGIN
 		SELECT
 			'Подписка на себя не допустима' AS message,
 			false AS is_valid;
-	ELSEIF pr_profile_subscribe_invite_id IS NOT NULL AND NOT profile_is_owner_subscribe_invite(pr_profile_to, pr_profile_subscribe_invite_id) THEN
+	ELSEIF pr_profile_subscribe_invite_id IS NOT NULL AND profile_subscribe_invite_get_profile_id(pr_profile_subscribe_invite_id) != pr_profile_to THEN
 		ROLLBACK;
 		SELECT
 			'Указанный профиль не является владельцем данной ссылки' AS message,
 			false AS is_valid;
-	ELSEIF profile_is_subscribe_to(pr_profile_at, pr_profile_to) THEN
+	ELSEIF profile_subscribe_is_exists(pr_profile_at, pr_profile_to) THEN
 		ROLLBACK;
 		SELECT
 			'Запрос на подписку этому профилю уже был отправлен' AS message,
+			false AS is_valid;
+	ELSEIF pr_profile_subscribe_invite_id IS NOT NULL AND profile_subscribe_invite_subscribers_count(pr_profile_subscribe_invite_id) >= profile_subscribe_invite_get_inviting_limit(pr_profile_subscribe_invite_id) THEN
+		ROLLBACK;
+		SELECT
+			'Лимит для присоединения по ссылке исчерпан' AS message,
 			false AS is_valid;
     ELSE
 		SET pr_is_accept_status = profile_subscribe_invite_get_is_auto_accept(pr_profile_subscribe_invite_id);
@@ -533,7 +660,7 @@ BEGIN
 		SELECT
 			'Профиля с указанным идентификатором не существует' AS message,
 			false AS is_valid;
-	ELSEIF NOT profile_is_subscribe_to(pr_profile_at, pr_profile_to) THEN
+	ELSEIF NOT profile_subscribe_is_exists(pr_profile_at, pr_profile_to) THEN
 		ROLLBACK;
 		SELECT
 			'Указанная подписка не была найдена' AS message,
@@ -552,6 +679,58 @@ BEGIN
     END IF;
 END//
 
+CREATE PROCEDURE profile_get_subscribers(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_status ENUM('request', 'ignore', 'accept')
+)
+BEGIN
+	SELECT
+		pat.profile_id,
+        piat.name,
+        piat.avatar_url,
+        pat.is_archived,
+		pat.is_active,
+        piat.details,
+        ps.subscribed_at,
+        piat.created_at
+	FROM
+		profile_subscribe AS ps
+        INNER JOIN profile AS pat ON ps.profile_at = pat.profile_id
+        INNER JOIN profile AS pto ON ps.profile_to = pto.profile_id
+        INNER JOIN public_info AS piat ON pat.profile_id = piat.public_info_id
+        INNER JOIN public_info AS pito ON pto.profile_id = pito.public_info_id
+	WHERE
+		pto.profile_id = pr_profile_id AND
+        ps.status = pr_status;
+END//
+
+CREATE PROCEDURE profile_subscribe_invite_get_info_by_url(IN pr_url_value VARCHAR(25))
+BEGIN
+	SELECT
+		profile_subscribe_invite_id,
+        profile_id,
+        miniature_url
+    FROM profile_subscribe_invite
+    WHERE url_value = pr_url_value;
+END//
+
+CREATE PROCEDURE profile_subscribe_invite_get_invited_profiles(IN pr_profile_subscribe_invite_id BIGINT UNSIGNED)
+BEGIN
+	SELECT
+		p.profile_id,
+        pi.name,
+        pi.avatar_url,
+        p.is_archived,
+		p.is_active,
+        pi.details,
+        ps.subscribed_at,
+        pi.created_at
+	FROM
+		profile_subscribe AS ps
+        INNER JOIN profile AS p ON ps.profile_at = p.profile_id
+        INNER JOIN public_info AS pi ON pi.public_info_id = p.profile_id
+	WHERE profile_subscribe_invite_id = pr_profile_subscribe_invite_id;
+END//
 
 
 
