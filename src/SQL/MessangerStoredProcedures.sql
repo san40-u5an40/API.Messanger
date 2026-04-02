@@ -188,20 +188,35 @@ BEGIN
     END IF;
 END//
 
+CREATE PROCEDURE profile_check_valid(
+	IN pr_profile_id BIGINT UNSIGNED,
+    OUT pr_is_valid BOOLEAN,
+    OUT pr_message TEXT
+)
+BEGIN
+    IF pr_profile_id IS NULL THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Необходимо указать идентификатор профиля';
+    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
+		SET pr_is_valid = false;
+        SET pr_message = 'Указанного профиля не существует';
+	ELSE
+		SET pr_is_valid = true;
+        SET pr_message = null;
+    END IF;
+END//
+
 CREATE PROCEDURE profile_delete(IN pr_profile_id BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_id IS NULL THEN
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор профиля для его удаления' AS message,
+			@message AS message,
             false AS is_valid;
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
-		SELECT
-			'Указанного профиля не существует' AS message,
-			false AS is_valid;
     ELSE
 		DELETE FROM profile
         WHERE profile_id = pr_profile_id;
@@ -220,16 +235,13 @@ CREATE PROCEDURE profile_select(IN pr_profile_id BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_id IS NULL THEN
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор профиля' AS message,
+			@message AS message,
             false AS is_valid;
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
-		SELECT
-			'Указанного профиля не существует' AS message,
-			false AS is_valid;
     ELSE
 		UPDATE profile
 		SET is_last_selected = IF(profile_id = pr_profile_id, true, false)
@@ -241,24 +253,6 @@ BEGIN
 			'Профиль успешно выбран' AS message,
             true AS is_valid;
         COMMIT;
-    END IF;
-END//
-
-CREATE PROCEDURE profile_check_valid(
-	IN pr_profile_id BIGINT UNSIGNED,
-    OUT pr_is_valid BOOLEAN,
-    OUT pr_message TEXT
-)
-BEGIN
-    IF pr_profile_id IS NULL THEN
-		SET pr_is_valid = false;
-        SET pr_message = 'Необходимо указать идентификатор профиля';
-    ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		SET pr_is_valid = false;
-        SET pr_message = 'Указанного профиля не существует';
-	ELSE
-		SET pr_is_valid = true;
-        SET pr_message = null;
     END IF;
 END//
 
@@ -331,6 +325,32 @@ BEGIN
     ELSE
 		UPDATE profile
 		SET is_can_searched = pr_is_can_searched
+        WHERE profile_id = pr_profile_id;
+        
+		SELECT
+			'Настройки профиля успешно изменены' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_is_allow_message_for_non_subscribers_set(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_is_allow_message_for_non_subscribers BOOLEAN
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE profile
+		SET is_allow_message_for_non_subscribers = pr_is_allow_message_for_non_subscribers
         WHERE profile_id = pr_profile_id;
         
 		SELECT
@@ -732,18 +752,171 @@ BEGIN
 	WHERE profile_subscribe_invite_id = pr_profile_subscribe_invite_id;
 END//
 
+CREATE PROCEDURE profile_content_item_create(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_value TEXT,
+    IN pr_forwarded_id BIGINT UNSIGNED,
+    OUT pr_is_valid BOOLEAN,
+    OUT pr_error_message TEXT,
+    OUT pr_profile_content_item_id BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    IF pr_profile_id IS NULL OR pr_value IS NULL OR pr_value = '' THEN
+		ROLLBACK;
+        SET pr_is_valid = false;
+        SET pr_error_message = 'Необходимо указать автора и отправляемое сообщение';
+	ELSEIF NOT profile_is_exists(pr_profile_id) THEN
+		ROLLBACK;
+        SET pr_is_valid = false;
+        SET pr_error_message = 'Указанного профиля не существует';
+	ELSEIF pr_forwarded_id IS NOT NULL AND NOT profile_content_item_is_exists(pr_forwarded_id) THEN
+		ROLLBACK;
+        SET pr_is_valid = false;
+        SET pr_error_message = 'Указанного пересылаемого сообщения не существует';
+    ELSE
+		INSERT INTO profile_content_item
+        SET
+			profile_id = pr_profile_id,
+            value = pr_value,
+            forwarded_id = pr_forwarded_id;
+        
+        SET pr_profile_content_item_id = LAST_INSERT_ID();
+        SET pr_is_valid = true;
+        
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_content_item_watch(
+	IN pr_profile_content_item_id BIGINT UNSIGNED,
+	IN pr_profile_id BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    IF pr_profile_content_item_id IS NULL OR pr_profile_id IS NULL THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать просматриваемый контент и профиль' AS message,
+            false AS is_valid;
+	ELSEIF NOT profile_is_exists(pr_profile_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного профиля не существует' AS message,
+			false AS is_valid;
+	ELSEIF NOT profile_content_item_is_exists(pr_profile_content_item_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного контента не существует' AS message,
+			false AS is_valid;
+    ELSE
+		IF NOT profile_get_is_hide_watch(pr_profile_id) THEN
+			INSERT INTO profile_content_item_watch
+			SET
+				profile_content_item_id = pr_profile_content_item_id,
+                profile_id = pr_profile_id;
+        END IF;
+        
+		SELECT
+			'Информация о просмотре учтена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_is_hide_watch_set(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_is_hide_watch BOOLEAN
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE profile
+		SET is_hide_watch = pr_is_hide_watch
+        WHERE profile_id = pr_profile_id;
+        
+        IF pr_is_hide_watch THEN
+			DELETE
+            FROM profile_content_item_watch
+            WHERE
+				profile_id = pr_profile_id AND
+                profile_content_item_watch_id > 0; -- Чтобы не выключать SafeMode
+        END IF;
+        
+		SELECT
+			'Настройки профиля успешно изменены' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_content_item_report(
+	IN pr_profile_content_item_id BIGINT UNSIGNED,
+	IN pr_reporter_account_id BIGINT UNSIGNED,
+    IN pr_details VARCHAR(100)
+)
+BEGIN
+	DECLARE pr_profile_id BIGINT UNSIGNED;
+    DECLARE pr_account_id BIGINT UNSIGNED;
+
+	START TRANSACTION;
+    
+    IF pr_profile_content_item_id IS NULL OR pr_reporter_account_id IS NULL OR pr_details IS NULL OR pr_details = '' THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать контент, свой аккаунт и детали для составления жалобы' AS message,
+            false AS is_valid;
+	ELSEIF NOT profile_content_item_is_exists(pr_profile_content_item_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного контента не существует' AS message,
+			false AS is_valid;
+	ELSEIF NOT account_is_exists_by_id(pr_reporter_account_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного аккаунта не существует' AS message,
+			false AS is_valid;
+	ELSEIF profile_content_item_report_is_exists(pr_profile_content_item_id, pr_reporter_account_id) THEN
+		ROLLBACK;
+		SELECT
+			'Вами уже была отправлена жалоба на указанный контент' AS message,
+			false AS is_valid;
+    ELSE
+		SET pr_profile_id = profile_content_item_get_profile_id(pr_profile_content_item_id);
+        SET pr_account_id = profile_get_account_id(pr_profile_id);
+        
+        INSERT INTO profile_content_item_report
+        SET
+			profile_content_item_id = pr_profile_content_item_id,
+            profile_id = pr_profile_id,
+            account_id = pr_account_id,
+            reporter_account_id = pr_reporter_account_id,
+            details = pr_details;
+        
+		SELECT
+			'Жалоба на контент успешно отправлена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+
 
 
 
 
 
 DELIMITER ;
-
--- TODO:
-/*
-- При отключении просмотров у профиля удалять их все
-- В целом добавить методы для включения и отключения просмотров у профиля
-*/
 
 -- Шаблон для хранимки
 /*

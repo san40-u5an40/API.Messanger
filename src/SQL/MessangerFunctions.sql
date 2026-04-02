@@ -197,7 +197,94 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_content_item_is_exists(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id
+    );
+END//
+
+CREATE FUNCTION profile_get_is_hide_watch(pr_profile_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT is_hide_watch
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
+CREATE FUNCTION profile_content_item_get_watching_count(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile_content_item_watch
+        WHERE profile_content_item_id = pr_profile_content_item_id
+    );
+END//
+
+CREATE FUNCTION profile_content_item_get_sharing_count(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile_content_item
+        WHERE forwarded_id = pr_profile_content_item_id
+    );
+END//
+
+CREATE FUNCTION profile_content_item_get_profile_id(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_id
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id
+    );
+END//
+
+CREATE FUNCTION profile_content_item_report_is_exists(
+	pr_profile_content_item_id BIGINT UNSIGNED,
+	pr_reporter_account_id BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_content_item_report
+        WHERE
+			profile_content_item_id = pr_profile_content_item_id AND
+            reporter_account_id = pr_reporter_account_id
+    );
+END//
+
+
+
 
 
 
 DELIMITER ;
+
+-- Шаблон для функции
+/*
+CREATE FUNCTION ( BIGINT UNSIGNED)
+RETURNS 
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT 
+        FROM 
+        WHERE 
+    );
+END//
+*/

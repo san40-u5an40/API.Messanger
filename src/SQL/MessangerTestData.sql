@@ -183,7 +183,7 @@ INSERT INTO profile_content_item (profile_id, forwarded_id, value, created_at) V
 (8, 6, 'Где скачать трек?', '2024-01-07 20:10:00'),
 (12, 5, 'Спасибо за комплекс!', '2024-01-13 09:45:00');
 
-INSERT INTO profile_content_item_report (profile_content_item_id, profile_id, account_id, reporter_profile_id, created_at, details) VALUES
+INSERT INTO profile_content_item_report (profile_content_item_id, profile_id, account_id, reporter_account_id, created_at, details) VALUES
 (6, 3, 5, 5, '2024-01-13 10:30:00', 'Спам'),
 (8, 4, 7, 7, '2024-01-12 15:45:00', 'Неприемлемый контент'),
 (12, 6, 11, 11, '2024-01-10 14:15:00', 'Оскорбления'),

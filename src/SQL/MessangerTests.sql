@@ -15,6 +15,7 @@ CALL profile_select(@profile_id);
 CALL profile_is_archived_set(@profile_id, true);
 CALL profile_is_active_set(@profile_id, false);
 CALL profile_is_can_searched_set(@profile_id, false);
+CALL profile_is_allow_message_for_non_subscribers_set(@profile_id, false);
 CALL account_get_profiles(2, false);
 
 CALL profiles_search('Public', 0, 10);
@@ -36,7 +37,15 @@ CALL profile_get_subscribers(1, 'accept');
 CALL profile_subscribe_invite_get_info_by_url('ekaterina_pm');
 CALL profile_subscribe_invite_get_invited_profiles(2);
 
+CALL profile_content_item_create(1, 'Всем хаюшки', 3, @is_valid, @error_message, @profile_content_item_id);
+SELECT profile_content_item_get_profile_id(@profile_content_item_id);
+CALL profile_content_item_watch(@profile_content_item_id, 2); -- Не скрывает просмотры
+CALL profile_content_item_watch(@profile_content_item_id, 3); -- Скрывает просмотры
+SELECT profile_content_item_get_watching_count(@profile_content_item_id);
+SELECT profile_content_item_get_sharing_count(3);
+CALL profile_is_hide_watch_set(2, true);
 
+CALL profile_content_item_report(@profile_content_item_id, 13, 'Треш, угар и содомия');
 
 
 
