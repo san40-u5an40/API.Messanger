@@ -50,8 +50,8 @@ CREATE TABLE IF NOT EXISTS profile (
 	account_id BIGINT UNSIGNED NOT NULL,
     is_last_selected BOOLEAN NOT NULL DEFAULT false,
     is_archived BOOLEAN NOT NULL DEFAULT false,
-    is_can_searched BOOLEAN NOT NULL DEFAULT true, -- Отображение в поисковой выдаче
-    is_allow_message_for_non_subscribers BOOLEAN NOT NULL DEFAULT true, -- Могут ли неподписанные профили отправлять сообщение этому профилю
+    is_can_searched BOOLEAN NOT NULL DEFAULT false, -- Отображение в поисковой выдаче
+    is_allow_message_for_non_subscribers BOOLEAN NOT NULL DEFAULT false, -- Могут ли неподписанные профили отправлять сообщение этому профилю
     is_hide_watch BOOLEAN NOT NULL DEFAULT false, -- Скрывает просмотры из статистики
     is_active BOOLEAN NOT NULL DEFAULT true, -- Доступен ли сейчас профиль для отправки сообщений
     FOREIGN KEY (profile_id) REFERENCES public_info (public_info_id) ON DELETE RESTRICT, -- TODO: Проверить не находится ли по этому id групповой чат

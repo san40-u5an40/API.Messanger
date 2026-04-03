@@ -268,6 +268,87 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_get_is_allow_message_for_non_subscribers(pr_profile_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT is_allow_message_for_non_subscribers
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
+CREATE FUNCTION profile_subscribe_is_accept(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT status = 'accept'
+        FROM profile_subscribe
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to
+    );
+END//
+
+CREATE FUNCTION profile_message_is_can_sended(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN IFNULL((SELECT profile_get_is_allow_message_for_non_subscribers(pr_profile_to) OR profile_subscribe_is_accept(pr_profile_at, pr_profile_to)), false);
+END//
+
+CREATE FUNCTION profile_message_is_exists(pr_profile_message_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_message
+        WHERE profile_message_id = pr_profile_message_id
+    );
+END//
+
+CREATE FUNCTION profile_message_get_profile_to(pr_profile_message_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_to
+        FROM profile_message
+        WHERE profile_message_id = pr_profile_message_id
+    );
+END//
+
+CREATE FUNCTION profile_message_get_is_checked(pr_profile_message_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT is_checked
+        FROM profile_message
+        WHERE profile_message_id = pr_profile_message_id
+    );
+END//
+
+CREATE FUNCTION profile_message_get_profile_content_item_id(pr_profile_message_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_content_item_id
+        FROM profile_message
+        WHERE profile_message_id = pr_profile_message_id
+    );
+END//
+
 
 
 

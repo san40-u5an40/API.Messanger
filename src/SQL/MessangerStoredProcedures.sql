@@ -761,18 +761,13 @@ CREATE PROCEDURE profile_content_item_create(
     OUT pr_profile_content_item_id BIGINT UNSIGNED
 )
 BEGIN
-	START TRANSACTION;
-    
     IF pr_profile_id IS NULL OR pr_value IS NULL OR pr_value = '' THEN
-		ROLLBACK;
         SET pr_is_valid = false;
         SET pr_error_message = 'Необходимо указать автора и отправляемое сообщение';
 	ELSEIF NOT profile_is_exists(pr_profile_id) THEN
-		ROLLBACK;
         SET pr_is_valid = false;
         SET pr_error_message = 'Указанного профиля не существует';
 	ELSEIF pr_forwarded_id IS NOT NULL AND NOT profile_content_item_is_exists(pr_forwarded_id) THEN
-		ROLLBACK;
         SET pr_is_valid = false;
         SET pr_error_message = 'Указанного пересылаемого сообщения не существует';
     ELSE
@@ -784,8 +779,6 @@ BEGIN
         
         SET pr_profile_content_item_id = LAST_INSERT_ID();
         SET pr_is_valid = true;
-        
-        COMMIT;
     END IF;
 END//
 
@@ -910,13 +903,173 @@ BEGIN
     END IF;
 END//
 
+CREATE PROCEDURE profile_message_send(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED,
+    IN pr_value TEXT,
+    IN pr_forwarded_content_item_id BIGINT UNSIGNED,
+    OUT pr_profile_message_id BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profile_content_item_create(pr_profile_at, pr_value, pr_forwarded_content_item_id, @is_valid, @error_message, @profile_content_item_id);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@error_message AS message,
+			false AS is_valid;
+	ELSEIF pr_profile_to IS NULL OR NOT profile_is_exists(pr_profile_to) THEN
+		ROLLBACK;
+		SELECT
+			'Получатель сообщения не был найден' AS message,
+			false AS is_valid;
+	ELSEIF NOT profile_message_is_can_sended(pr_profile_at, pr_profile_to) THEN
+		ROLLBACK;
+		SELECT
+			'У вас нет доступа к отправке сообщений этому профилю' AS message,
+			false AS is_valid;
+    ELSE
+		INSERT INTO profile_message
+        SET
+			profile_content_item_id = @profile_content_item_id,
+            profile_to = pr_profile_to,
+            is_checked = IFNULL(pr_profile_at = pr_profile_to, false); -- Сообщения из избранного автоматически считаются за прочитанные
+        
+        SET pr_profile_message_id = LAST_INSERT_ID();
+        
+		SELECT
+			'Сообщение успешно отправлено' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
 
+CREATE PROCEDURE profile_message_check(IN pr_profile_message_id BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+    
+    IF pr_profile_message_id IS NULL THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать сообщение для просмотра' AS message,
+            false AS is_valid;
+    ELSEIF NOT profile_message_is_exists(pr_profile_message_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного сообщения не существует' AS message,
+			false AS is_valid;
+    ELSE
+		IF NOT profile_message_get_is_checked(pr_profile_message_id) THEN
+			UPDATE profile_message
+            SET is_checked = true
+            WHERE profile_message_id = pr_profile_message_id;
+        END IF;
+        
+		SELECT
+			'Информация о просмотре учтена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_message_delete(IN pr_profile_message_id BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+    
+    IF pr_profile_message_id IS NULL THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать сообщение для удаления' AS message,
+            false AS is_valid;
+    ELSEIF NOT profile_message_is_exists(pr_profile_message_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного сообщения не существует' AS message,
+			false AS is_valid;
+    ELSE
+		DELETE
+        FROM profile_message
+        WHERE profile_message_id = pr_profile_message_id;
+        
+		SELECT
+			'Сообщение удалено' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_content_item_get_info(IN pr_profile_content_item_id BIGINT UNSIGNED)
+BEGIN
+	SELECT
+		profile_id,
+        forwarded_id,
+        value,
+        created_at
+    FROM profile_content_item
+    WHERE profile_content_item_id = pr_profile_content_item_id;
+END//
+
+CREATE PROCEDURE profile_messages_get_from(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED,
+    IN pr_profile_message_id_start BIGINT UNSIGNED, -- Применимый сценарий, сообщения подгружаются по мере листания чата
+    IN pr_messages_count INT UNSIGNED
+)
+BEGIN
+	SELECT
+		m.profile_message_id,
+		ci.profile_content_item_id,
+		ci.value,
+        ci.created_at,
+        m.is_checked,
+        ci.forwarded_id
+    FROM
+		profile_message AS m
+        INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
+    WHERE
+		ci.profile_id = pr_profile_at AND
+        m.profile_to = pr_profile_to AND
+        profile_message_id < pr_profile_message_id_start
+	ORDER BY m.profile_message_id DESC
+    LIMIT pr_messages_count;
+END//
+
+CREATE PROCEDURE profile_messages_get_last_from(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED
+)
+BEGIN
+	SELECT
+		m.profile_message_id,
+		ci.profile_content_item_id,
+		ci.value,
+        ci.created_at,
+        m.is_checked,
+        ci.forwarded_id
+    FROM
+		profile_message AS m
+        INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
+    WHERE
+		ci.profile_id = pr_profile_at AND
+        m.profile_to = pr_profile_to
+	ORDER BY m.profile_message_id DESC
+    LIMIT 1;
+END//
 
 
 
 
 
 DELIMITER ;
+
+-- TODO
+/*
+- Полный список с обычными и групповыми сообщениями
+- Указатель на последний просмотренный пост
+- Указатель на последнее просмотренное групповое сообщение
+*/
 
 -- Шаблон для хранимки
 /*

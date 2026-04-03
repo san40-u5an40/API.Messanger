@@ -47,6 +47,18 @@ CALL profile_is_hide_watch_set(2, true);
 
 CALL profile_content_item_report(@profile_content_item_id, 13, 'Треш, угар и содомия');
 
+CALL profile_message_send(2, 1, 'Здаров, братка!', null, @profile_message_id);
+CALL profile_content_item_get_info(profile_message_get_profile_content_item_id(@profile_message_id));
+
+CALL profile_messages_get_from(2, 1, 100, 40);
+CALL profile_messages_get_last_from(2, 1);
+
+SELECT profile_message_get_is_checked(@profile_message_id);
+CALL profile_message_check(@profile_message_id);
+
+CALL profile_message_delete(@profile_message_id);
+
+
 
 
 
