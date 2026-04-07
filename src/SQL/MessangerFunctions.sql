@@ -104,6 +104,17 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_get_is_last_selected(pr_profile_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT is_last_selected
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
 CREATE FUNCTION profile_subscribe_invite_is_exists_by_url(pr_profile_subscribe_invite_url VARCHAR(25))
 RETURNS BOOLEAN
 READS SQL DATA
@@ -295,6 +306,22 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_subscribe_is_ignore(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT status = 'ignore'
+        FROM profile_subscribe
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to
+    );
+END//
+
 CREATE FUNCTION profile_message_is_can_sended(
 	pr_profile_at BIGINT UNSIGNED,
     pr_profile_to BIGINT UNSIGNED
@@ -349,7 +376,106 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_content_item_get_value(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS TEXT
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT value
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id
+    );
+END//
 
+CREATE FUNCTION profile_publication_get_profile_content_item_id(pr_profile_publication_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_content_item_id
+        FROM profile_publication
+        WHERE profile_publication_id = pr_profile_publication_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_message_get_profile_content_item_id(pr_profile_group_chat_message_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_content_item_id
+        FROM profile_group_chat_message
+        WHERE profile_group_chat_message_id = pr_profile_group_chat_message_id
+    );
+END//
+
+CREATE FUNCTION profile_message_unchecked_count_from(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM
+			profile_message AS m
+            INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
+        WHERE
+			ci.profile_id = pr_profile_at AND
+			m.profile_to = pr_profile_to AND
+            is_checked = false
+    );
+END//
+
+CREATE FUNCTION account_get_selected_profile_count(pr_account_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile
+        WHERE
+			account_id = pr_account_id AND
+            is_last_selected = true
+    );
+END//
+
+CREATE FUNCTION account_get_selected_profile_id(pr_account_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_id
+        FROM profile
+        WHERE
+			account_id = pr_account_id AND
+            is_last_selected = true
+		LIMIT 1
+    );
+END//
+
+CREATE FUNCTION profile_publication_get_comments_count(pr_profile_publication_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile_publication_comment
+        WHERE profile_publication_id = pr_profile_publication_id
+    );
+END//
+
+CREATE FUNCTION profile_publication_is_exists(pr_profile_publication_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_publication
+        WHERE profile_publication_id = pr_profile_publication_id
+    );
+END//
 
 
 

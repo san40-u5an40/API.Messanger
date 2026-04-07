@@ -12,6 +12,7 @@ SELECT @profile_id;
 SELECT account_profile_count(2);
 
 CALL profile_select(@profile_id);
+CALL profile_unselect(@profile_id);
 CALL profile_is_archived_set(@profile_id, true);
 CALL profile_is_active_set(@profile_id, false);
 CALL profile_is_can_searched_set(@profile_id, false);
@@ -34,10 +35,14 @@ CALL profile_subscribe(7, 1, 2);
 CALL profile_unsubscribe(7, 1);
 CALL profile_get_subscribers(1, 'accept');
 
+CALL profile_subscribe_accept(7, 1);
+CALL profile_subscribe_ignore(7, 1);
+
 CALL profile_subscribe_invite_get_info_by_url('ekaterina_pm');
 CALL profile_subscribe_invite_get_invited_profiles(2);
 
 CALL profile_content_item_create(1, 'Всем хаюшки', 3, @is_valid, @error_message, @profile_content_item_id);
+CALL profile_content_item_edit(@profile_content_item_id, 'Новое значение');
 SELECT profile_content_item_get_profile_id(@profile_content_item_id);
 CALL profile_content_item_watch(@profile_content_item_id, 2); -- Не скрывает просмотры
 CALL profile_content_item_watch(@profile_content_item_id, 3); -- Скрывает просмотры
@@ -49,16 +54,18 @@ CALL profile_content_item_report(@profile_content_item_id, 13, 'Треш, уга
 
 CALL profile_message_send(2, 1, 'Здаров, братка!', null, @profile_message_id);
 CALL profile_content_item_get_info(profile_message_get_profile_content_item_id(@profile_message_id));
+SELECT profile_message_unchecked_count_from(2, 1);
+CALL profile_message_check(@profile_message_id);
+SELECT profile_message_get_is_checked(@profile_message_id);
 
 CALL profile_messages_get_from(2, 1, 100, 40);
 CALL profile_messages_get_last_from(2, 1);
 
-SELECT profile_message_get_is_checked(@profile_message_id);
-CALL profile_message_check(@profile_message_id);
-
 CALL profile_message_delete(@profile_message_id);
 
-
+CALL profile_publication_create(2, 'Всем привет, я тутава!', null, @profile_publication_id);
+SELECT @profile_publication_id;
+CALL profile_publication_delete(@profile_publication_id);
 
 
 

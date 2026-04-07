@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS profile_content_item (
     forwarded_id BIGINT UNSIGNED, -- Рекурсивная ссылка
     value TEXT NOT NULL, -- MarkDown формат
     created_at DATETIME NOT NULL DEFAULT NOW(),
+    edited_at DATETIME DEFAULT null,
     FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE CASCADE,
     FOREIGN KEY (forwarded_id) REFERENCES profile_content_item (profile_content_item_id) ON DELETE SET NULL
 );

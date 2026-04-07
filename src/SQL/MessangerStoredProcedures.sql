@@ -244,13 +244,41 @@ BEGIN
             false AS is_valid;
     ELSE
 		UPDATE profile
-		SET is_last_selected = IF(profile_id = pr_profile_id, true, false)
+		SET is_last_selected = (profile_id = pr_profile_id)
         WHERE
 			account_id = profile_get_account_id(pr_profile_id) AND
             profile_id > 0; -- Чтобы не выключать SafeMode
         
 		SELECT
 			'Профиль успешно выбран' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_unselect(IN pr_profile_id BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+	ELSEIF NOT profile_get_is_last_selected(pr_profile_id) THEN
+		ROLLBACK;
+		SELECT
+			'Профиль изначально не был выбран' AS message,
+            false AS is_valid;
+    ELSE
+		UPDATE profile
+		SET is_last_selected = false
+        WHERE profile_id = pr_profile_id;
+        
+		SELECT
+			'Выбор профиля успешно отменён' AS message,
             true AS is_valid;
         COMMIT;
     END IF;
@@ -570,7 +598,7 @@ BEGIN
     END IF;
 END//
 
-CREATE PROCEDURE profile_subscribe_invite_delete(pr_profile_subscribe_invite_id BIGINT UNSIGNED)
+CREATE PROCEDURE profile_subscribe_invite_delete(IN pr_profile_subscribe_invite_id BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
     
@@ -596,6 +624,28 @@ BEGIN
     END IF;
 END//
 
+CREATE PROCEDURE profiles_check_valid(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED,
+    OUT pr_is_valid BOOLEAN,
+    OUT pr_error_message TEXT
+)
+BEGIN
+	IF pr_profile_at IS NULL OR pr_profile_to IS NULL THEN
+		SET pr_is_valid = false;
+        SET pr_error_message = 'Необходимо указать идентификатор для обоих профилей';
+	ELSEIF NOT profile_is_exists(pr_profile_at) THEN
+		SET pr_is_valid = false;
+        SET pr_error_message = 'Подписчика с указанным идентификатором не существует';
+	ELSEIF NOT profile_is_exists(pr_profile_to) THEN
+		SET pr_is_valid = false;
+        SET pr_error_message = 'Профиля с указанным идентификатором не существует';
+	ELSE
+		SET pr_is_valid = true;
+        SET pr_error_message = null;
+    END IF;
+END//
+
 CREATE PROCEDURE profile_subscribe(
 	IN pr_profile_at BIGINT UNSIGNED,
     IN pr_profile_to BIGINT UNSIGNED,
@@ -606,21 +656,13 @@ BEGIN
 
 	START TRANSACTION;
     
-    IF pr_profile_at IS NULL OR pr_profile_to IS NULL THEN
+    CALL profiles_check_valid(pr_profile_at, pr_profile_to, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор для обоих профилей: кто и на кого подписывается' AS message,
+			@message AS message,
             false AS is_valid;
-	ELSEIF NOT profile_is_exists(pr_profile_at) THEN
-		ROLLBACK;
-		SELECT
-			'Подписчика с указанным идентификатором не существует' AS message,
-			false AS is_valid;
-	ELSEIF NOT profile_is_exists(pr_profile_to) THEN
-		ROLLBACK;
-		SELECT
-			'Профиля с указанным идентификатором не существует' AS message,
-			false AS is_valid;
 	ELSEIF pr_profile_at = pr_profile_to THEN
 		ROLLBACK;
 		SELECT
@@ -658,6 +700,7 @@ BEGIN
     END IF;
 END//
 
+-- Используется и при отписке подписчиком, и при удалении профилем подписчика
 CREATE PROCEDURE profile_unsubscribe(
 	IN pr_profile_at BIGINT UNSIGNED,
     IN pr_profile_to BIGINT UNSIGNED
@@ -665,21 +708,13 @@ CREATE PROCEDURE profile_unsubscribe(
 BEGIN
 	START TRANSACTION;
     
-    IF pr_profile_at IS NULL OR pr_profile_to IS NULL THEN
+    CALL profiles_check_valid(pr_profile_at, pr_profile_to, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать идентификатор для обоих профилей: кто и от кого отписывается' AS message,
+			@message AS message,
             false AS is_valid;
-	ELSEIF NOT profile_is_exists(pr_profile_at) THEN
-		ROLLBACK;
-		SELECT
-			'Подписчика с указанным идентификатором не существует' AS message,
-			false AS is_valid;
-	ELSEIF NOT profile_is_exists(pr_profile_to) THEN
-		ROLLBACK;
-		SELECT
-			'Профиля с указанным идентификатором не существует' AS message,
-			false AS is_valid;
 	ELSEIF NOT profile_subscribe_is_exists(pr_profile_at, pr_profile_to) THEN
 		ROLLBACK;
 		SELECT
@@ -694,6 +729,72 @@ BEGIN
         
 		SELECT
 			'Отписка успешно осуществлена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_subscribe_accept(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profiles_check_valid(pr_profile_at, pr_profile_to, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+	ELSEIF profile_subscribe_is_accept(pr_profile_at, pr_profile_to) THEN
+		ROLLBACK;
+		SELECT
+			'Заявка на подписку уже одобрена' AS message,
+			false AS is_valid;
+    ELSE
+		UPDATE profile_subscribe
+        SET status = 'accept'
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to;
+        
+		SELECT
+			'Заявка успешно принята' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_subscribe_ignore(
+	IN pr_profile_at BIGINT UNSIGNED,
+    IN pr_profile_to BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profiles_check_valid(pr_profile_at, pr_profile_to, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+	ELSEIF profile_subscribe_is_ignore(pr_profile_at, pr_profile_to) THEN
+		ROLLBACK;
+		SELECT
+			'Заявка на подписку уже проигнорирована' AS message,
+			false AS is_valid;
+    ELSE
+		UPDATE profile_subscribe
+        SET status = 'ignore'
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to;
+        
+		SELECT
+			'Заявка успешно проигнорирована' AS message,
             true AS is_valid;
         COMMIT;
     END IF;
@@ -731,7 +832,7 @@ BEGIN
         profile_id,
         miniature_url
     FROM profile_subscribe_invite
-    WHERE url_value = pr_url_value;
+    WHERE url_value = CAST(pr_url_value AS BINARY);
 END//
 
 CREATE PROCEDURE profile_subscribe_invite_get_invited_profiles(IN pr_profile_subscribe_invite_id BIGINT UNSIGNED)
@@ -779,6 +880,40 @@ BEGIN
         
         SET pr_profile_content_item_id = LAST_INSERT_ID();
         SET pr_is_valid = true;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_content_item_edit(
+	IN pr_profile_content_item_id BIGINT UNSIGNED,
+    IN pr_value TEXT
+)
+BEGIN
+	START TRANSACTION;
+    
+    IF pr_profile_content_item_id IS NULL OR pr_value IS NULL OR pr_value = '' THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать идентификатор контента и новое значение' AS message,
+            false AS is_valid;
+	ELSEIF NOT profile_content_item_is_exists(pr_profile_content_item_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного контента не существует' AS message,
+			false AS is_valid;
+	ELSEIF profile_content_item_get_value(pr_profile_content_item_id) = CAST(pr_value AS BINARY) THEN
+		ROLLBACK;
+		SELECT
+			'Для изменения контента необходимо указать значение, отличающееся от старого' AS message,
+			false AS is_valid;
+    ELSE
+		UPDATE profile_content_item
+        SET value = pr_value
+        WHERE profile_content_item_id = pr_profile_content_item_id;
+        
+		SELECT
+			'Контент успешно изменён' AS message,
+            true AS is_valid;
+        COMMIT;
     END IF;
 END//
 
@@ -948,8 +1083,11 @@ END//
 
 CREATE PROCEDURE profile_message_check(IN pr_profile_message_id BIGINT UNSIGNED)
 BEGIN
+	DECLARE pr_profile_to BIGINT UNSIGNED;
+	
 	START TRANSACTION;
     
+    SET pr_profile_to = profile_message_get_profile_to(pr_profile_message_id);
     IF pr_profile_message_id IS NULL THEN
 		ROLLBACK;
 		SELECT
@@ -964,7 +1102,10 @@ BEGIN
 		IF NOT profile_message_get_is_checked(pr_profile_message_id) THEN
 			UPDATE profile_message
             SET is_checked = true
-            WHERE profile_message_id = pr_profile_message_id;
+            WHERE
+				profile_to = pr_profile_to AND
+                is_checked = false AND
+				profile_message_id <= pr_profile_message_id;
         END IF;
         
 		SELECT
@@ -976,8 +1117,11 @@ END//
 
 CREATE PROCEDURE profile_message_delete(IN pr_profile_message_id BIGINT UNSIGNED)
 BEGIN
+	DECLARE pr_profile_content_item_id BIGINT UNSIGNED;
+
 	START TRANSACTION;
     
+    SET pr_profile_content_item_id = profile_message_get_profile_content_item_id(pr_profile_message_id);
     IF pr_profile_message_id IS NULL THEN
 		ROLLBACK;
 		SELECT
@@ -990,8 +1134,8 @@ BEGIN
 			false AS is_valid;
     ELSE
 		DELETE
-        FROM profile_message
-        WHERE profile_message_id = pr_profile_message_id;
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id;
         
 		SELECT
 			'Сообщение удалено' AS message,
@@ -1004,11 +1148,11 @@ CREATE PROCEDURE profile_content_item_get_info(IN pr_profile_content_item_id BIG
 BEGIN
 	SELECT
 		profile_id,
-        forwarded_id,
-        value,
-        created_at
-    FROM profile_content_item
-    WHERE profile_content_item_id = pr_profile_content_item_id;
+		forwarded_id,
+		value,
+		created_at
+	FROM profile_content_item
+	WHERE profile_content_item_id = pr_profile_content_item_id;
 END//
 
 CREATE PROCEDURE profile_messages_get_from(
@@ -1036,39 +1180,95 @@ BEGIN
     LIMIT pr_messages_count;
 END//
 
-CREATE PROCEDURE profile_messages_get_last_from(
-	IN pr_profile_at BIGINT UNSIGNED,
-    IN pr_profile_to BIGINT UNSIGNED
+CREATE PROCEDURE profile_publication_create(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_value TEXT,
+    IN pr_forwarded_content_item_id BIGINT UNSIGNED,
+    OUT pr_profile_publication_id BIGINT UNSIGNED
 )
 BEGIN
-	SELECT
-		m.profile_message_id,
-		ci.profile_content_item_id,
-		ci.value,
-        ci.created_at,
-        m.is_checked,
-        ci.forwarded_id
-    FROM
-		profile_message AS m
-        INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
-    WHERE
-		ci.profile_id = pr_profile_at AND
-        m.profile_to = pr_profile_to
-	ORDER BY m.profile_message_id DESC
-    LIMIT 1;
+	START TRANSACTION;
+    
+    CALL profile_content_item_create(pr_profile_id, pr_value, pr_forwarded_content_item_id, @is_valid, @error_message, @profile_content_item_id);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@error_message AS message,
+			false AS is_valid;
+    ELSE
+		INSERT INTO profile_publication
+        SET profile_content_item_id = @profile_content_item_id;
+        
+        SET pr_profile_publication_id = LAST_INSERT_ID();
+        
+		SELECT
+			'Контент успешно опубликован' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
 END//
 
+CREATE PROCEDURE profile_publication_delete(IN pr_profile_publication_id BIGINT UNSIGNED)
+BEGIN
+	DECLARE pr_profile_content_item_id BIGINT UNSIGNED;
 
+	START TRANSACTION;
+    
+    SET pr_profile_content_item_id = profile_publication_get_profile_content_item_id(pr_profile_publication_id);
+    IF pr_profile_publication_id IS NULL THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать публикацию для удаления' AS message,
+            false AS is_valid;
+    ELSEIF NOT profile_publication_is_exists(pr_profile_publication_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанной публикации не существует' AS message,
+			false AS is_valid;
+    ELSE
+		DELETE
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id;
+        
+		SELECT
+			'Публикация удалена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
 
+CREATE PROCEDURE profile_publication_comment_create() -- +Проверка подписчик ли
+CREATE PROCEDURE profile_publication_comment_delete() -- +Проверка создатель ли коммента
+CREATE PROCEDURE profile_publication_comment_get_from() -- +Проверка подписчик ли
 
+CREATE PROCEDURE profile_group_chat_create()
+CREATE PROCEDURE profile_group_chat_delete() -- +Проверка на владение
+CREATE PROCEDURE profile_group_chat_member_add() -- +Проверка на право модерации
+CREATE PROCEDURE profile_group_chat_member_delete() -- +Проверка на право модерации
+CREATE PROCEDURE profile_group_chat_member_custom_title_set() -- +Проверка на право модерации
+CREATE PROCEDURE profile_group_chat_member_status_set() -- +Проверка на владение
+CREATE PROCEDURE profile_group_chat_member_transfer_ownership() -- +Проверка на владение
+CREATE PROCEDURE profile_group_chat_get_members() -- +Проверка состоит ли в чате
+CREATE PROCEDURE profile_group_chat_message_send() -- +Проверка состоит ли в чате
+CREATE PROCEDURE profile_group_chat_message_delete() -- +Проверка состоит ли в чате
+
+CREATE PROCEDURE profile_publication_check() -- +Проверка подписчик ли
+CREATE PROCEDURE profile_group_chat_message_check() -- +Проверка состоит ли в чате
+CREATE PROCEDURE profile_get_messages() -- И из индивидуальных чатов, и из групповых, с индикацией просмотренности, количеством новых сообщений, последним сообщением и индикатором самого профиля (если сообщение) или группового чата (соответственно)
+CREATE PROCEDURE profile_get_publications() -- Если в параметре профиля null, то лента со всеми публикациями из подписок + количество комментариев
 
 DELIMITER ;
 
 -- TODO
 /*
-- Полный список с обычными и групповыми сообщениями
-- Указатель на последний просмотренный пост
-- Указатель на последнее просмотренное групповое сообщение
+- При удалении профиля передавать права на владения групповыми чатами другим людям (чекнуть и другие RESTRICT)
+- При удалении аккаунта это всё делать в автоматическом режиме
+- Указатель на последний просмотренный пост или таблица с просмотренными постами
+- Указатель на последнее просмотренное групповое сообщение или таблица с просмотренными сообщениями
+- Функция подсчёта новых публикаций в ленте (или у отдельного профиля)
+- Функция подсчёта новых групповых сообщений
+- Просмотр пересылаемого контента только при наличии подписки
 */
 
 -- Шаблон для хранимки
