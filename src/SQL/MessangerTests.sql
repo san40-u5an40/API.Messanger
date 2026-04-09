@@ -67,5 +67,20 @@ CALL profile_publication_create(2, 'Всем привет, я тутава!', nu
 SELECT @profile_publication_id;
 CALL profile_publication_delete(@profile_publication_id);
 
+CALL profile_publication_comment_create(@profile_publication_id, 6, 'Вот это ты загнул конечно', null, @profile_publication_comment_id);
+SELECT @profile_publication_comment_id;
+SELECT profile_publication_get_comments_count(@profile_publication_id);
+CALL profile_publication_comment_delete(@profile_publication_comment_id);
+CALL profile_publication_comment_get_from(@profile_publication_id);
+
+CALL profile_group_chat_create(10, 'Злые киски', 'Фотографии с вашими милыми питомцами', '/avatars/злые_киски_1.jpg', @profile_group_chat_id);
+CALL profile_group_chat_delete(@profile_group_chat_id);
+
+CALL profile_group_chat_member_add(30, 13, null, 'Пахан', @profile_group_chat_member_id);
+SELECT @profile_group_chat_member_id;
+CALL profile_group_chat_member_delete(@profile_group_chat_member_id);
+
+
+
 
 

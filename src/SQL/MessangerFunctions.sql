@@ -322,6 +322,17 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_get_is_active(pr_profile_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT is_active
+        FROM profile
+        WHERE profile_id = pr_profile_id
+    );
+END//
+
 CREATE FUNCTION profile_message_is_can_sended(
 	pr_profile_at BIGINT UNSIGNED,
     pr_profile_to BIGINT UNSIGNED
@@ -329,7 +340,11 @@ CREATE FUNCTION profile_message_is_can_sended(
 RETURNS BOOLEAN
 READS SQL DATA
 BEGIN
-	RETURN IFNULL((SELECT profile_get_is_allow_message_for_non_subscribers(pr_profile_to) OR profile_subscribe_is_accept(pr_profile_at, pr_profile_to)), false);
+	RETURN IFNULL((
+		SELECT
+			profile_get_is_active(pr_profile_to) AND
+			(profile_get_is_allow_message_for_non_subscribers(pr_profile_to) OR profile_subscribe_is_accept(pr_profile_at, pr_profile_to))
+	), false);
 END//
 
 CREATE FUNCTION profile_message_is_exists(pr_profile_message_id BIGINT UNSIGNED)
@@ -409,6 +424,17 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_publication_comment_get_profile_content_item_id(pr_profile_publication_comment_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_content_item_id
+        FROM profile_publication_comment
+        WHERE profile_publication_comment_id = pr_profile_publication_comment_id
+    );
+END//
+
 CREATE FUNCTION profile_message_unchecked_count_from(
 	pr_profile_at BIGINT UNSIGNED,
     pr_profile_to BIGINT UNSIGNED
@@ -474,6 +500,99 @@ BEGIN
 		SELECT 1
         FROM profile_publication
         WHERE profile_publication_id = pr_profile_publication_id
+    );
+END//
+
+CREATE FUNCTION profile_publication_comment_is_exists(pr_profile_publication_comment_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_publication_comment
+        WHERE profile_publication_comment_id = pr_profile_publication_comment_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_is_exists(pr_profile_group_chat_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_group_chat
+        WHERE profile_group_chat_id = pr_profile_group_chat_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_get_profile_id(pr_profile_group_chat_member_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_id
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_is_can_moderating(pr_profile_group_chat_member_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT status = 'owner' OR status = 'moderator'
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_is_owner(pr_profile_group_chat_member_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT status = 'owner'
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_is_exists_by_info(
+	pr_profile_group_chat_id BIGINT UNSIGNED,
+    pr_profile_id BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_group_chat_member
+        WHERE
+			profile_group_chat_id = pr_profile_group_chat_id AND
+			profile_id = pr_profile_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_is_exists_by_id(pr_profile_group_chat_member_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_member_get_profile_group_chat_id(pr_profile_group_chat_member_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_group_chat_id
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id
     );
 END//
 
