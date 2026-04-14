@@ -168,7 +168,8 @@ CREATE TABLE IF NOT EXISTS profile_group_chat_member (
     custom_title VARCHAR(20), -- Кличка/роль устанавливаемая админом или модератором
     FOREIGN KEY (profile_group_chat_id) REFERENCES profile_group_chat (profile_group_chat_id) ON DELETE CASCADE,
     FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE CASCADE,
-    INDEX idx_profile_group_chat_id_profile_id(profile_group_chat_id, profile_id)
+    INDEX idx_profile_group_chat_id_profile_id(profile_group_chat_id, profile_id),
+    INDEX idx_profile_group_chat_id_status(profile_group_chat_id, status)
 );
 
 DROP TABLE IF EXISTS profile_group_chat_message;

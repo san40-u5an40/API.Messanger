@@ -596,6 +596,29 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_group_chat_message_is_exists(pr_profile_group_chat_message_id BIGINT UNSIGNED)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_group_chat_message
+        WHERE profile_group_chat_message_id = pr_profile_group_chat_message_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_message_get_profile_group_chat_id(pr_profile_group_chat_message_id BIGINT UNSIGNED)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_group_chat_id
+        FROM profile_group_chat_message
+        WHERE profile_group_chat_message_id = pr_profile_group_chat_message_id
+    );
+END//
+
+
 
 
 

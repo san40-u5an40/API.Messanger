@@ -80,6 +80,17 @@ CALL profile_group_chat_member_add(30, 13, null, 'Пахан', @profile_group_ch
 SELECT @profile_group_chat_member_id;
 CALL profile_group_chat_member_delete(@profile_group_chat_member_id);
 
+CALL profile_group_chat_member_custom_title_set(@profile_group_chat_member_id, 'Почти батя');
+CALL profile_group_chat_member_block(@profile_group_chat_member_id);
+CALL profile_group_chat_member_set_moderator(@profile_group_chat_member_id);
+CALL profile_group_chat_member_set_member(@profile_group_chat_member_id);
+CALL profile_group_chat_member_transfer_ownership(@profile_group_chat_member_id);
+
+CALL profile_group_chat_members_get_from(30);
+
+
+
+
 
 
 
