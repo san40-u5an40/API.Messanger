@@ -152,17 +152,17 @@ BEGIN
 	START TRANSACTION;
     
     SET pr_account_profile_count = account_profile_count(pr_account_id);
-    IF pr_account_id IS NULL OR pr_name IS NULL THEN
+    IF pr_account_id IS NULL OR pr_name IS NULL OR pr_name = '' OR pr_account_profile_limit IS NULL THEN
 		ROLLBACK;
 		SELECT
-			'Необходимо указать аккаунт и имя профиля для его создания' AS message,
+			'Необходимо указать аккаунт, имя профиля и лимит профилей для его создания' AS message,
             false AS is_valid;
     ELSEIF NOT account_is_exists_by_id(pr_account_id) THEN
 		ROLLBACK;
 		SELECT
 			'Указанного аккаунта не существует' AS message,
 			false AS is_valid;
-    ELSEIF pr_account_profile_count >= IFNULL(pr_account_profile_limit, 10) THEN
+    ELSEIF pr_account_profile_count >= pr_account_profile_limit THEN
 		ROLLBACK;
 		SELECT
 			'Достигнут лимит создаваемых профилей' AS message,
@@ -1649,6 +1649,10 @@ BEGIN
         SET status = 'owner'
         WHERE profile_group_chat_member_id = pr_profile_group_chat_member_id;
         
+        UPDATE profile_group_chat
+        SET profile_id = profile_group_chat_member_get_profile_id(pr_profile_group_chat_member_id)
+        WHERE profile_group_chat_id = pr_profile_group_chat_id;
+        
 		SELECT
 			'Права на групповой чат успешно переданы' AS message,
             true AS is_valid;
@@ -1675,12 +1679,209 @@ BEGIN
 	WHERE profile_group_chat_id = pr_profile_group_chat_id;
 END//
 
-CREATE PROCEDURE profile_group_chat_message_send() -- +Проверка состоит ли в чате
-CREATE PROCEDURE profile_group_chat_message_delete() -- +Проверка состоит ли в чате
-CREATE PROCEDURE profile_group_chat_messages_get_from() -- +Проверка состоит ли в чате
+CREATE PROCEDURE profile_group_chat_message_send(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_profile_group_chat_id BIGINT UNSIGNED,
+    IN pr_value TEXT,
+    IN pr_forwarded_content_item_id BIGINT UNSIGNED,
+    OUT pr_profile_group_chat_message_id BIGINT UNSIGNED
+)
+BEGIN
+	START TRANSACTION;
+    
+    CALL profile_content_item_create(pr_profile_id, pr_value, pr_forwarded_content_item_id, @is_valid, @error_message, @profile_content_item_id);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@error_message AS message,
+			false AS is_valid;
+	ELSEIF pr_profile_group_chat_id IS NULL OR NOT profile_group_chat_is_exists(pr_profile_group_chat_id) THEN
+		ROLLBACK;
+		SELECT
+			'Групповой чат не был найден' AS message,
+			false AS is_valid;
+	ELSEIF NOT profile_group_chat_member_is_exists_by_info(pr_profile_group_chat_id, pr_profile_id) THEN
+		ROLLBACK;
+		SELECT
+			'У вас нет доступа к отправке сообщений в этот чат' AS message,
+			false AS is_valid;
+    ELSE
+		INSERT INTO profile_group_chat_message
+        SET
+			profile_content_item_id = @profile_content_item_id,
+            profile_group_chat_id = pr_profile_group_chat_id;
+        
+        SET pr_profile_group_chat_message_id = LAST_INSERT_ID();
+        
+		SELECT
+			'Сообщение успешно отправлено' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
 
-CREATE PROCEDURE profile_publication_check() -- +Проверка подписчик ли
-CREATE PROCEDURE profile_group_chat_message_check() -- +Проверка состоит ли в чате
+CREATE PROCEDURE profile_group_chat_message_delete(IN pr_profile_group_chat_message_id BIGINT UNSIGNED)
+BEGIN
+	DECLARE pr_profile_content_item_id BIGINT UNSIGNED;
+
+	START TRANSACTION;
+    
+    SET pr_profile_content_item_id = profile_group_chat_message_get_profile_content_item_id(pr_profile_group_chat_message_id);
+    IF pr_profile_group_chat_message_id IS NULL THEN
+		ROLLBACK;
+		SELECT
+			'Необходимо указать сообщение для удаления' AS message,
+            false AS is_valid;
+    ELSEIF NOT profile_group_chat_message_is_exists(pr_profile_group_chat_message_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанного сообщения не существует' AS message,
+			false AS is_valid;
+    ELSE
+		DELETE
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id;
+        
+		SELECT
+			'Сообщение удалено' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_group_chat_messages_get_from(
+	IN pr_profile_group_chat_id BIGINT UNSIGNED,
+    IN pr_profile_group_chat_message_id_start BIGINT UNSIGNED, -- Применимый сценарий, сообщения подгружаются по мере листания чата
+    IN pr_messages_count INT UNSIGNED
+)
+BEGIN
+	SELECT
+		profile_group_chat_message_id,
+		profile_content_item_id,
+		value,
+        ci.created_at,
+        edited_at,
+        true AS is_checked, -- ПОКА ЧТО ЗАГЛУШКА ПОТОМ ПРОВЕРЯТЬ ПО ТАБЛИЦЕ ПРОСМОТРОВ
+        forwarded_id,
+        profile_id,
+        name,
+        avatar_url
+    FROM
+		profile_group_chat_message AS m
+        INNER JOIN profile_content_item AS ci USING (profile_content_item_id)
+        INNER JOIN public_info AS pi ON profile_id = public_info_id
+    WHERE
+		profile_group_chat_id = pr_profile_group_chat_id AND
+        profile_group_chat_message_id < pr_profile_group_chat_message_id_start
+	ORDER BY profile_group_chat_message_id DESC
+    LIMIT pr_messages_count;
+END//
+
+CREATE PROCEDURE profile_publication_check(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_profile_publication_id BIGINT UNSIGNED
+)
+BEGIN
+	DECLARE pr_profile_to BIGINT UNSIGNED;
+    DECLARE pr_last_profile_publication_id BIGINT UNSIGNED;
+
+	START TRANSACTION;
+    
+    SET pr_profile_to = profile_content_item_get_profile_id(profile_publication_get_profile_content_item_id(pr_profile_publication_id));
+    SET pr_last_profile_publication_id = profile_publication_checked_get_profile_publication_id(pr_profile_id, pr_profile_to);
+    
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSEIF pr_profile_publication_id IS NULL OR NOT profile_publication_is_exists(pr_profile_publication_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанная публикация не была найдена' AS message,
+			false AS is_valid;
+	ELSEIF NOT profile_subscribe_is_exists(pr_profile_id, pr_profile_to) THEN
+		ROLLBACK;
+		SELECT
+			'У вас нет доступа к просмотру указанной публикации' AS message,
+			false AS is_valid;
+    ELSE
+		IF profile_publication_checked_is_exists(pr_profile_id, pr_profile_to) THEN
+			UPDATE profile_publication_checked
+            SET profile_publication_id = IF(pr_profile_publication_id > pr_last_profile_publication_id, pr_profile_publication_id, pr_last_profile_publication_id)
+            WHERE
+				profile_at = pr_profile_id AND
+                profile_to = pr_profile_to;
+        ELSE
+			INSERT INTO profile_publication_checked
+            SET
+				profile_at = pr_profile_id,
+                profile_to = pr_profile_to,
+                profile_publication_id = pr_profile_publication_id;
+        END IF;
+        
+		SELECT
+			'Информация о просмотре публикации учтена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
+CREATE PROCEDURE profile_group_chat_message_check(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_profile_group_chat_message_id BIGINT UNSIGNED
+)
+BEGIN
+	DECLARE pr_profile_group_chat_id BIGINT UNSIGNED;
+    DECLARE pr_last_profile_group_chat_message_id BIGINT UNSIGNED;
+
+	START TRANSACTION;
+    
+    SET pr_profile_group_chat_id = profile_group_chat_message_get_profile_group_chat_id(pr_profile_group_chat_message_id);
+    SET pr_last_profile_group_chat_message_id = profile_group_chat_message_checked_get_group_chat_message_id(pr_profile_id, pr_profile_group_chat_id);
+    
+    CALL profile_check_valid(pr_profile_id, @is_valid, @message);
+    
+    IF NOT @is_valid THEN
+		ROLLBACK;
+		SELECT
+			@message AS message,
+            false AS is_valid;
+    ELSEIF pr_profile_group_chat_message_id IS NULL OR NOT profile_group_chat_message_is_exists(pr_profile_group_chat_message_id) THEN
+		ROLLBACK;
+		SELECT
+			'Указанное сообщение не было найдено' AS message,
+			false AS is_valid;
+	ELSEIF NOT profile_group_chat_member_is_exists_by_info(pr_profile_group_chat_id, pr_profile_id) THEN
+		ROLLBACK;
+		SELECT
+			'У вас нет доступа к просмотру указанного сообщения' AS message,
+			false AS is_valid;
+    ELSE
+		IF profile_group_chat_message_checked_is_exists(pr_profile_id, pr_profile_group_chat_id) THEN
+			UPDATE profile_group_chat_message_checked
+            SET profile_group_chat_message_id = IF(pr_profile_group_chat_message_id > pr_last_profile_group_chat_message_id, pr_profile_group_chat_message_id, pr_last_profile_group_chat_message_id)
+            WHERE
+				profile_id = pr_profile_id AND
+                profile_group_chat_id = pr_profile_group_chat_id;
+        ELSE
+			INSERT INTO profile_group_chat_message_checked
+            SET
+				profile_id = pr_profile_id,
+                profile_group_chat_id = pr_profile_group_chat_id,
+                profile_group_chat_message_id = pr_profile_group_chat_message_id;
+        END IF;
+        
+		SELECT
+			'Информация о просмотре сообщения учтена' AS message,
+            true AS is_valid;
+        COMMIT;
+    END IF;
+END//
+
 CREATE PROCEDURE profile_get_messages() -- И из индивидуальных чатов, и из групповых, с индикацией просмотренности, количеством новых сообщений, последним сообщением и индикатором самого профиля (если сообщение) или группового чата (соответственно)
 CREATE PROCEDURE profile_publications_get_from() -- Если в параметре профиля null, то лента со всеми публикациями из подписок + количество комментариев
 
@@ -1694,22 +1895,21 @@ DELIMITER ;
 /*
 - При удалении профиля передавать права на владения групповыми чатами другим людям (чекнуть и другие RESTRICT)
 - При удалении аккаунта это всё делать в автоматическом режиме
-- Таблица с новыми постами
-- Таблица с новыми групповыми сообщениями
 - Функция подсчёта новых публикаций в ленте (или у отдельного профиля)
 - Функция подсчёта новых групповых сообщений
 */
 
 -- Перспективы развития
 /*
-- Приглашения на групповые чаты (возможно также вынести оформление в отдельную таблицу)
+- Приглашения на групповые чаты (возможно также вынести оформление ссылок в отдельную таблицу)
 - Аудио-сообщения
 - Счета с монетами
 - Premium-подписка
+- Скрытие просмотров сделать только для premium-пользователей
 - Выбор рамки для public_info (premium)
 - Период в который допустима отправка сообщений (premium)
-- Увеличить лемит профилей (premium)
-- Транскибирование аудио
+- Увеличить лимит профилей (premium)
+- Транскибирование аудио (premium)
 */
 
 -- Шаблон для хранимки

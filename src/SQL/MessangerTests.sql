@@ -88,6 +88,14 @@ CALL profile_group_chat_member_transfer_ownership(@profile_group_chat_member_id)
 
 CALL profile_group_chat_members_get_from(30);
 
+CALL profile_group_chat_message_send(17, 30, 'Я в этом чатике, всем дрожать!', null, @profile_group_chat_message_id);
+CALL profile_group_chat_message_delete(@profile_group_chat_message_id);
+CALL profile_group_chat_messages_get_from(30, 100, 10);
+
+CALL profile_publication_check(2, 3);
+CALL profile_group_chat_message_check(4, 2);
+
+
 
 
 

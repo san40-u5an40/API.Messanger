@@ -618,6 +618,70 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_publication_checked_is_exists(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_publication_checked
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_message_checked_is_exists(
+	pr_profile_id BIGINT UNSIGNED,
+    pr_profile_group_chat_id BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	RETURN EXISTS(
+		SELECT 1
+        FROM profile_group_chat_message_checked
+        WHERE
+			profile_id = pr_profile_id AND
+            profile_group_chat_id = pr_profile_group_chat_id
+    );
+END//
+
+CREATE FUNCTION profile_group_chat_message_checked_get_group_chat_message_id(
+	pr_profile_id BIGINT UNSIGNED,
+	pr_profile_group_chat_id BIGINT UNSIGNED
+)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_group_chat_message_id
+        FROM profile_group_chat_message_checked
+        WHERE
+			profile_id = pr_profile_id AND
+            profile_group_chat_id = pr_profile_group_chat_id
+    );
+END//
+
+CREATE FUNCTION profile_publication_checked_get_profile_publication_id(
+	pr_profile_at BIGINT UNSIGNED,
+    pr_profile_to BIGINT UNSIGNED
+)
+RETURNS BIGINT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_publication_id
+        FROM profile_publication_checked
+        WHERE
+			profile_at = pr_profile_at AND
+            profile_to = pr_profile_to
+    );
+END//
+
 
 
 

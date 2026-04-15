@@ -181,5 +181,27 @@ CREATE TABLE IF NOT EXISTS profile_group_chat_message (
     FOREIGN KEY (profile_group_chat_id) REFERENCES profile_group_chat (profile_group_chat_id) ON DELETE CASCADE
 );
 
+DROP TABLE IF EXISTS profile_publication_checked;
+CREATE TABLE IF NOT EXISTS profile_publication_checked (
+    profile_at BIGINT UNSIGNED NOT NULL,
+    profile_to BIGINT UNSIGNED NOT NULL,
+    profile_publication_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY(profile_at, profile_to),
+    FOREIGN KEY (profile_at) REFERENCES profile (profile_id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_to) REFERENCES profile (profile_id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_publication_id) REFERENCES profile_publication (profile_publication_id) ON DELETE NO ACTION
+);
+
+DROP TABLE IF EXISTS profile_group_chat_message_checked;
+CREATE TABLE IF NOT EXISTS profile_group_chat_message_checked (
+	profile_id BIGINT UNSIGNED NOT NULL,
+    profile_group_chat_id BIGINT UNSIGNED NOT NULL,
+    profile_group_chat_message_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY(profile_id, profile_group_chat_id),
+    FOREIGN KEY (profile_id) REFERENCES profile (profile_id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_group_chat_id) REFERENCES profile_group_chat (profile_group_chat_id) ON DELETE CASCADE,
+    FOREIGN KEY (profile_group_chat_message_id) REFERENCES profile_group_chat_message (profile_group_chat_message_id) ON DELETE NO ACTION
+);
+
 -- Эта структура представлена исключительно в учебных целях
 -- Реальные проекты основанные на данной логике и реализуемые в РФ нарушали бы пакет Яровой
