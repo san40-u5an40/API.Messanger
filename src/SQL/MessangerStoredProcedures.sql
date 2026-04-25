@@ -833,6 +833,33 @@ BEGIN
         status = pr_status;
 END//
 
+CREATE PROCEDURE profile_get_subscriptions(
+	IN pr_profile_id BIGINT UNSIGNED,
+    IN pr_status ENUM('request', 'accept')
+)
+BEGIN
+	SELECT
+		profile_id,
+        name,
+        avatar_url,
+        profile_get_new_publications_count(pr_profile_id, profile_id) AS new_publications_count,
+        is_archived,
+		is_active,
+        details,
+        subscribed_at,
+        created_at
+	FROM
+		profile_subscribe
+        INNER JOIN profile ON profile_to = profile_id
+        INNER JOIN public_info ON profile_id = public_info_id
+	WHERE
+		profile_at = pr_profile_id AND
+        CASE
+			WHEN pr_status = 'request' THEN status IN ('request', 'ignore')
+			ELSE status = 'accept'
+		END;
+END//
+
 CREATE PROCEDURE profile_subscribe_invite_get_info_by_url(IN pr_url_value VARCHAR(25))
 BEGIN
 	SELECT
@@ -1068,7 +1095,7 @@ BEGIN
 		SELECT
 			'Получатель сообщения не был найден' AS message,
 			false AS is_valid;
-	ELSEIF NOT profile_message_is_can_sended(pr_profile_at, pr_profile_to) THEN
+	ELSEIF pr_profile_at != pr_profile_to AND NOT profile_message_is_can_sended(pr_profile_at, pr_profile_to) THEN
 		ROLLBACK;
 		SELECT
 			'У вас нет доступа к отправке сообщений этому профилю' AS message,
@@ -1751,6 +1778,7 @@ BEGIN
 END//
 
 CREATE PROCEDURE profile_group_chat_messages_get_from(
+	IN pr_profile_id BIGINT UNSIGNED,
 	IN pr_profile_group_chat_id BIGINT UNSIGNED,
     IN pr_profile_group_chat_message_id_start BIGINT UNSIGNED, -- Применимый сценарий, сообщения подгружаются по мере листания чата
     IN pr_messages_count INT UNSIGNED
@@ -1760,22 +1788,22 @@ BEGIN
 		profile_group_chat_message_id,
 		profile_content_item_id,
 		value,
-        ci.created_at,
-        edited_at,
-        true AS is_checked, -- ПОКА ЧТО ЗАГЛУШКА ПОТОМ ПРОВЕРЯТЬ ПО ТАБЛИЦЕ ПРОСМОТРОВ
-        forwarded_id,
-        profile_id,
-        name,
-        avatar_url
-    FROM
+		ci.created_at,
+		edited_at,
+		profile_group_chat_message_is_checked(pr_profile_id, profile_group_chat_message_id) AS is_checked,
+		forwarded_id,
+		profile_id,
+		name,
+		avatar_url
+	FROM
 		profile_group_chat_message AS m
-        INNER JOIN profile_content_item AS ci USING (profile_content_item_id)
-        INNER JOIN public_info AS pi ON profile_id = public_info_id
-    WHERE
+		INNER JOIN profile_content_item AS ci USING (profile_content_item_id)
+		INNER JOIN public_info AS pi ON profile_id = public_info_id
+	WHERE
 		profile_group_chat_id = pr_profile_group_chat_id AND
-        profile_group_chat_message_id < pr_profile_group_chat_message_id_start
+		profile_group_chat_message_id < pr_profile_group_chat_message_id_start
 	ORDER BY profile_group_chat_message_id DESC
-    LIMIT pr_messages_count;
+	LIMIT pr_messages_count;
 END//
 
 CREATE PROCEDURE profile_publication_check(
@@ -1882,22 +1910,107 @@ BEGIN
     END IF;
 END//
 
-CREATE PROCEDURE profile_get_messages() -- И из индивидуальных чатов, и из групповых, с индикацией просмотренности, количеством новых сообщений, последним сообщением и индикатором самого профиля (если сообщение) или группового чата (соответственно)
-CREATE PROCEDURE profile_publications_get_from() -- Если в параметре профиля null, то лента со всеми публикациями из подписок + количество комментариев
+CREATE PROCEDURE profile_publications_get_from(
+	IN pr_profile_at BIGINT UNSIGNED,
+	IN pr_profile_to BIGINT UNSIGNED, -- Если null, возвращаются публикации от всех профилей (на которые подписан pr_profile_at)
+	IN pr_profile_publication_id_start BIGINT UNSIGNED, -- Применимый сценарий, публикации подгружаются по мере листания ленты/стены
+    IN pr_publications_count INT UNSIGNED
+)
+BEGIN
+	WITH subscriptions AS (
+		SELECT profile_to
+		FROM profile_subscribe
+		WHERE profile_at = pr_profile_at
+    )
+	SELECT
+		profile_publication_id,
+		profile_content_item_id,
+		value,
+        profile_publication_get_comments_count(profile_publication_id) AS comments_count,
+		ci.created_at,
+		edited_at,
+		profile_publication_is_checked(pr_profile_at, profile_publication_id) AS is_checked,
+		forwarded_id,
+		profile_id,
+		name,
+		avatar_url
+	FROM
+		profile_publication AS p
+        INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
+        INNER JOIN public_info AS pi ON public_info_id = profile_id
+        INNER JOIN subscriptions AS s ON profile_id = profile_to -- Как фильтр для подписок
+	WHERE
+		(pr_profile_to IS NULL OR profile_id = pr_profile_to) AND
+		profile_publication_id < pr_profile_publication_id_start
+	ORDER BY
+		is_checked,
+		profile_publication_id DESC
+	LIMIT pr_publications_count;
+END//
 
-
-
-
-
-DELIMITER ;
+CREATE PROCEDURE profile_get_messages(IN pr_profile_id BIGINT UNSIGNED)
+BEGIN
+	WITH
+		interlocutors_with_last_message_id AS (
+			SELECT
+				IF(ci.profile_id = pr_profile_id, m.profile_to, ci.profile_id) AS interlocutor_id,
+				MAX(profile_message_id) AS last_message_id,
+                SUM(is_checked = false) AS new_messages_count
+			FROM
+				profile_content_item AS ci
+				INNER JOIN profile_message AS m USING(profile_content_item_id)
+			WHERE pr_profile_id IN(ci.profile_id, m.profile_to)
+			GROUP BY interlocutor_id
+        ),
+		group_chats AS (
+			SELECT profile_group_chat_id
+            FROM profile_group_chat_member
+            WHERE profile_id = pr_profile_id
+		)
+	SELECT
+		interlocutor_id AS chat_id,
+        'profile' AS chat_type,
+        last_message_id,
+        IF(interlocutor_id = pr_profile_id, true, profile_get_is_active(interlocutor_id)) is_active,
+        profile_content_item_get_created_at(profile_message_get_profile_content_item_id(last_message_id)) AS created_at,
+        profile_message_get_is_checked(last_message_id) AS is_checked,
+		name,
+        avatar_url,
+		profile_content_item_get_value(profile_message_get_profile_content_item_id(last_message_id)) AS last_message_value,
+		new_messages_count
+	FROM
+		interlocutors_with_last_message_id
+        INNER JOIN public_info ON interlocutor_id = public_info_id
+    UNION ALL
+    SELECT
+		profile_group_chat_id AS chat_id,
+        'group_chat' AS chat_type,
+        last_message_id,
+        true AS is_active, -- Пока что для групповых чатов не планируется настройка их активности, они всегда могут принимать сообщения
+        profile_content_item_get_created_at(profile_group_chat_message_get_profile_content_item_id(last_message_id)) AS created_at,
+        profile_group_chat_message_is_checked(pr_profile_id, last_message_id) AS is_checked,
+		name,
+        avatar_url,
+		profile_content_item_get_value(profile_group_chat_message_get_profile_content_item_id(last_message_id)) AS last_message_value,
+		profile_group_chat_get_new_messages_count(profile_group_chat_id, pr_profile_id) AS new_messages_count
+	FROM
+		(
+			SELECT
+				profile_group_chat_id,
+                profile_group_chat_get_last_message_id(profile_group_chat_id) AS last_message_id
+            FROM group_chats
+        ) AS group_chats_with_last_message_id
+        INNER JOIN public_info ON profile_group_chat_id = public_info_id
+	ORDER BY last_message_id DESC;
+END//
 
 -- TODO
 /*
-- При удалении профиля передавать права на владения групповыми чатами другим людям (чекнуть и другие RESTRICT)
-- При удалении аккаунта это всё делать в автоматическом режиме
-- Функция подсчёта новых публикаций в ленте (или у отдельного профиля)
-- Функция подсчёта новых групповых сообщений
+- При удалении профиля или аккаунта назначать других владельцев групповых чатов
+- При последнем участнике чата и его выходе удалять чат
 */
+
+DELIMITER ;
 
 -- Перспективы развития
 /*
@@ -1910,33 +2023,4 @@ DELIMITER ;
 - Период в который допустима отправка сообщений (premium)
 - Увеличить лимит профилей (premium)
 - Транскибирование аудио (premium)
-*/
-
--- Шаблон для хранимки
-/*
-CREATE PROCEDURE (
-	
-)
-BEGIN
-	START TRANSACTION;
-    
-    IF  IS NULL THEN
-		ROLLBACK;
-		SELECT
-			'Необходимо указать ' AS message,
-            false AS is_valid;
-    ELSEIF NOT  THEN
-		ROLLBACK;
-		SELECT
-			' не существует' AS message,
-			false AS is_valid;
-    ELSE
-		
-        
-		SELECT
-			'' AS message,
-            true AS is_valid;
-        COMMIT;
-    END IF;
-END//
 */

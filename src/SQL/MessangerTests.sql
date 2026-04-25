@@ -34,6 +34,7 @@ CALL profile_subscribe_invite_delete(@profile_subscribe_invite_id);
 CALL profile_subscribe(7, 1, 2);
 CALL profile_unsubscribe(7, 1);
 CALL profile_get_subscribers(1, 'accept');
+CALL profile_get_subscriptions(1, 'accept');
 
 CALL profile_subscribe_accept(7, 1);
 CALL profile_subscribe_ignore(7, 1);
@@ -90,16 +91,10 @@ CALL profile_group_chat_members_get_from(30);
 
 CALL profile_group_chat_message_send(17, 30, 'Я в этом чатике, всем дрожать!', null, @profile_group_chat_message_id);
 CALL profile_group_chat_message_delete(@profile_group_chat_message_id);
-CALL profile_group_chat_messages_get_from(30, 100, 10);
+CALL profile_group_chat_messages_get_from(17, 30, 100, 10);
+CALL profile_group_chat_message_check(17, 19);
 
-CALL profile_publication_check(2, 3);
-CALL profile_group_chat_message_check(4, 2);
+CALL profile_publication_check(7, 3);
+CALL profile_publications_get_from(7, null, 100, 10);
 
-
-
-
-
-
-
-
-
+CALL profile_get_messages(1);

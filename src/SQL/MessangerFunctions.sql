@@ -435,25 +435,6 @@ BEGIN
     );
 END//
 
-CREATE FUNCTION profile_message_unchecked_count_from(
-	pr_profile_at BIGINT UNSIGNED,
-    pr_profile_to BIGINT UNSIGNED
-)
-RETURNS INT UNSIGNED
-READS SQL DATA
-BEGIN
-	RETURN (
-		SELECT COUNT(*)
-        FROM
-			profile_message AS m
-            INNER JOIN profile_content_item AS ci USING(profile_content_item_id)
-        WHERE
-			ci.profile_id = pr_profile_at AND
-			m.profile_to = pr_profile_to AND
-            is_checked = false
-    );
-END//
-
 CREATE FUNCTION account_get_selected_profile_count(pr_account_id BIGINT UNSIGNED)
 RETURNS INT UNSIGNED
 READS SQL DATA
@@ -682,22 +663,112 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_group_chat_message_is_checked(
+	pr_profile_id BIGINT UNSIGNED,
+    pr_profile_group_chat_message_id BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	DECLARE pr_profile_group_chat_id BIGINT UNSIGNED;
+    SET pr_profile_group_chat_id = profile_group_chat_message_get_profile_group_chat_id(pr_profile_group_chat_message_id);
 
+	RETURN IFNULL((
+		SELECT profile_group_chat_message_id >= pr_profile_group_chat_message_id
+        FROM profile_group_chat_message_checked
+        WHERE
+			profile_id = pr_profile_id AND
+            profile_group_chat_id = pr_profile_group_chat_id
+    ), false);
+END//
 
+CREATE FUNCTION profile_publication_is_checked(
+	pr_profile_id BIGINT UNSIGNED,
+    pr_profile_publication_id BIGINT UNSIGNED
+)
+RETURNS BOOLEAN
+READS SQL DATA
+BEGIN
+	DECLARE pr_profile_to BIGINT UNSIGNED;
+	SET pr_profile_to = profile_content_item_get_profile_id(profile_publication_get_profile_content_item_id(pr_profile_publication_id));
 
+	RETURN IFNULL((
+		SELECT profile_publication_id >= pr_profile_publication_id
+        FROM profile_publication_checked
+        WHERE
+			profile_at = pr_profile_id AND
+            profile_to = pr_profile_to
+    ), false);
+END//
 
-DELIMITER ;
-
--- Шаблон для функции
-/*
-CREATE FUNCTION ( BIGINT UNSIGNED)
-RETURNS 
+CREATE FUNCTION profile_group_chat_get_new_messages_count(
+    pr_profile_group_chat_id BIGINT UNSIGNED,
+    pr_profile_id BIGINT UNSIGNED
+)
+RETURNS INT UNSIGNED
 READS SQL DATA
 BEGIN
 	RETURN (
-		SELECT 
-        FROM 
-        WHERE 
+		SELECT COUNT(*)
+        FROM profile_group_chat_message
+        WHERE
+			profile_group_chat_id = pr_profile_group_chat_id AND
+			profile_group_chat_message_id > IFNULL((
+				SELECT profile_group_chat_message_id
+                FROM profile_group_chat_message_checked
+                WHERE
+					profile_id = pr_profile_id AND
+                    profile_group_chat_id = pr_profile_group_chat_id
+            ), 0)
     );
 END//
-*/
+
+CREATE FUNCTION profile_group_chat_get_last_message_id(pr_profile_group_chat_id BIGINT UNSIGNED)
+RETURNS TEXT
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT profile_group_chat_message_id
+        FROM profile_group_chat_message
+        WHERE profile_group_chat_id = pr_profile_group_chat_id
+        ORDER BY profile_group_chat_message_id DESC
+        LIMIT 1
+    );
+END//
+
+CREATE FUNCTION profile_get_new_publications_count(
+	pr_profile_at BIGINT UNSIGNED,
+	pr_profile_to BIGINT UNSIGNED
+)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM
+			profile_publication
+            INNER JOIN profile_content_item USING(profile_content_item_id)
+        WHERE
+			profile_id = pr_profile_to AND
+			profile_publication_id > IFNULL((
+				SELECT profile_publication_id
+                FROM profile_publication_checked
+                WHERE
+					profile_at = pr_profile_at AND
+                    profile_to = pr_profile_to
+            ), 0)
+    );
+END//
+
+CREATE FUNCTION profile_content_item_get_created_at(pr_profile_content_item_id BIGINT UNSIGNED)
+RETURNS DATETIME
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT created_at
+        FROM profile_content_item
+        WHERE profile_content_item_id = pr_profile_content_item_id
+    );
+END//
+
+DELIMITER ;

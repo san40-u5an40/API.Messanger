@@ -132,7 +132,8 @@ CREATE TABLE IF NOT EXISTS profile_message (
     is_checked BOOLEAN NOT NULL DEFAULT false,
     FOREIGN KEY (profile_content_item_id) REFERENCES profile_content_item (profile_content_item_id) ON DELETE CASCADE,
     FOREIGN KEY (profile_to) REFERENCES profile (profile_id) ON DELETE CASCADE,
-    INDEX idx_profile_to_is_checked (profile_to, is_checked)
+    INDEX idx_profile_to_is_checked (profile_to, is_checked),
+    INDEX idx_profile_to_profile_message_id (profile_to, profile_message_id)
 );
 
 DROP TABLE IF EXISTS profile_publication;
