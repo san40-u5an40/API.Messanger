@@ -35,8 +35,90 @@ BEGIN
     END IF;
 END//
 
+-- Для передачи прав владения группой приемникам при удалении профиля
+CREATE PROCEDURE successors_assign_group_owners(IN pr_profile_id BIGINT UNSIGNED)
+BEGIN
+	DECLARE pr_done BOOLEAN DEFAULT false;
+	DECLARE pr_profile_group_chat_id BIGINT UNSIGNED;
+    DECLARE pr_new_owner_profile_id BIGINT UNSIGNED;
+    
+	DECLARE profile_group_chat_id_where_owner_cur CURSOR FOR
+		SELECT profile_group_chat_id
+        FROM profile_group_chat_member
+        WHERE
+			profile_id = pr_profile_id AND
+            status = 'owner';
+	
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET pr_done = true;
+    
+	OPEN profile_group_chat_id_where_owner_cur;
+    
+    read_loop: LOOP
+        FETCH profile_group_chat_id_where_owner_cur INTO pr_profile_group_chat_id;
+        
+        IF pr_done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        IF profile_group_chat_member_get_count(pr_profile_group_chat_id) > 1 THEN
+			SELECT profile_id INTO pr_new_owner_profile_id
+            FROM profile_group_chat_member
+            WHERE
+				profile_group_chat_id = pr_profile_group_chat_id AND
+				profile_id > pr_profile_id
+			LIMIT 1;
+            
+			UPDATE profile_group_chat
+			SET profile_id = pr_new_owner_profile_id
+			WHERE profile_group_chat_id = pr_profile_group_chat_id;
+			
+            DELETE
+			FROM profile_group_chat_member
+            WHERE
+				profile_group_chat_id = pr_profile_group_chat_id AND
+                profile_id = pr_profile_id;
+                
+			IF EXISTS (
+				SELECT 1
+                FROM profile_group_chat_member
+                WHERE
+					profile_group_chat_id = pr_profile_group_chat_id AND
+                    status = 'owner'
+            ) THEN
+				ROLLBACK;
+				SELECT
+					'Ошибка удаления владельца чата' AS message,
+					false AS is_valid;
+				LEAVE read_loop;
+			END IF;
+		
+			UPDATE profile_group_chat_member
+			SET status = 'owner'
+			WHERE
+				profile_group_chat_id = pr_profile_group_chat_id AND
+                profile_id = pr_new_owner_profile_id;
+		ELSE
+			DELETE
+            FROM profile_group_chat
+            WHERE profile_group_chat_id = pr_profile_group_chat_id;
+        END IF;
+    END LOOP;
+    
+    CLOSE profile_group_chat_id_where_owner_cur;
+END//
+
 CREATE PROCEDURE account_delete(IN pr_phone VARCHAR(17))
 BEGIN
+	DECLARE pr_done BOOLEAN DEFAULT false;
+    DECLARE pr_profile_id BIGINT UNSIGNED;
+    
+	DECLARE account_profiles_id CURSOR FOR
+		SELECT profile_id
+        FROM profile
+        WHERE account_id = account_get_id(pr_phone);
+	
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET pr_done = true;
+    
 	START TRANSACTION;
     
     IF pr_phone IS NULL THEN
@@ -50,6 +132,18 @@ BEGIN
 			'Аккаунта с указанным номером не существует' AS message,
             false AS is_valid;
     ELSE
+		OPEN account_profiles_id;
+		read_loop: LOOP
+			FETCH account_profiles_id INTO pr_profile_id;
+			
+			IF pr_done THEN
+				LEAVE read_loop;
+			END IF;
+			
+			CALL successors_assign_group_owners(pr_profile_id);
+		END LOOP;
+		CLOSE account_profiles_id;
+    
 		INSERT INTO account_deleted_history
         SET
 			phone = pr_phone,
@@ -218,6 +312,8 @@ BEGIN
 			@message AS message,
             false AS is_valid;
     ELSE
+		CALL successors_assign_group_owners(pr_profile_id);
+        
 		DELETE FROM profile
         WHERE profile_id = pr_profile_id;
     
@@ -2003,12 +2099,6 @@ BEGIN
         INNER JOIN public_info ON profile_group_chat_id = public_info_id
 	ORDER BY last_message_id DESC;
 END//
-
--- TODO
-/*
-- При удалении профиля или аккаунта назначать других владельцев групповых чатов
-- При последнем участнике чата и его выходе удалять чат
-*/
 
 DELIMITER ;
 

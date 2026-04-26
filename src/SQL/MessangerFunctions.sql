@@ -771,4 +771,15 @@ BEGIN
     );
 END//
 
+CREATE FUNCTION profile_group_chat_member_get_count(pr_profile_group_chat_id BIGINT UNSIGNED)
+RETURNS INT UNSIGNED
+READS SQL DATA
+BEGIN
+	RETURN (
+		SELECT COUNT(*)
+        FROM profile_group_chat_member
+        WHERE profile_group_chat_id = pr_profile_group_chat_id
+    );
+END//
+
 DELIMITER ;
